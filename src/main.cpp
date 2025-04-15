@@ -5,12 +5,12 @@
 #include <cstdlib>
 #include <sstream>
 #include <map>
+#include <stack>
 
 bool strContains(const std::string& a_str, const std::string& a_contains)
 {
     return a_str.find(a_contains) != std::string::npos; 
 }
-
 
 std::string extractBetweenQuotes(const std::string& a_input) {
     size_t start = a_input.find('"');
@@ -124,6 +124,20 @@ int main(int argc, char* argv[])
     std::vector<std::string> content = readFileLines(inPath); 
     std::string currentFilePath = inPath;
 
+    enum class IfType
+    {
+        IFDEF,
+        IFNDEF
+    };
+
+    struct IfData
+    {
+        size_t line; 
+        IfType type; 
+    };
+
+    std::stack<IfData> ifStack; 
+
     // Handling #include statements
     for(size_t i = 0; i < content.size();)
     {
@@ -162,66 +176,93 @@ int main(int argc, char* argv[])
     }
 
     // Handling #ifdef, #ifndef and #define statements
-    for(size_t i = 0; i < content.size(); i++)
+    for(size_t i = 0; i < content.size();)
     {
+        // Handling #endif
+        if(strContains(content[i], "#endif"))
+        {
+            if(ifStack.size() >= 1)
+            {
+                // We pop the last value in the ifStack
+                ifStack.pop(); 
+            }
+            i++;
+            continue; 
+        }
+
+        // Handling #ifdef
+        if(strContains(content[i], "#ifdef") || strContains(content[i], "#ifndef"))
+        {
+            std::vector<std::string> strSplitted = split(content[i], ' ');
+            
+            bool valueFalse = (defines.find(strSplitted[1]) == defines.end() || defines[strSplitted[1]] == "0" || defines[strSplitted[1]] == "false"); 
+
+            if((strContains(content[i], "#ifdef") &&  valueFalse) || (strContains(content[i], "#ifndef") && !valueFalse))
+            {
+                ifStack.push(IfData{i, IfType::IFDEF});
+            }
+            i++;
+            continue; 
+        }
+
+        // Deleting the lines if we are inside a ifndef or ifdef block that
+        if(ifStack.size() != 0)
+        {
+            content.erase(content.begin() + i); 
+
+            // Not i++ !; 
+            continue; 
+        }
 
         // Handling #defines
         if(strContains(content[i], "#define"))
         {
             std::vector<std::string> strSplitted = split(content[i], ' ');
-            std::vector<std::string> arguments; 
 
-
-            bool foundDefine = false; 
-
-            for(size_t j = 0; j < strSplitted.size(); j++)
+            if(strSplitted.size() >= 3)
             {
-                if(strSplitted[j] == "")
-                {
-                    continue; 
-                }
-                
-                if(strSplitted[j] == "#define")
-                {
-                    foundDefine = true; 
-                    continue; 
-                }
-
-                if(foundDefine == false)
-                {
-                    continue; 
-                }
-
-                arguments.push_back(strSplitted[j]);
+                defines[strSplitted[1]] = strSplitted[2];  
             }
-            
-            if(arguments.size() == 1)
+            else
             {
-                defines[arguments[0]] = "1"; 
+                defines[strSplitted[1]] = "1";
             }
-
-            if(arguments.size() >= 2)
-            {
-                defines[arguments[0]] = arguments[1];  
-            }
-            
-            // Erasing the line with the define
-            content.erase(content.begin() + i, content.begin() + i + 1); 
-            std::cout << "Erasing the line" << std::endl; 
+            i++; 
+            continue; 
         }
+
+        i++;
     }
+
+    // Cleaning up and removing all preprocessor lines
+    for(size_t i = 0; i < content.size();)
+    {
+
+        if(strContains(content[i], "#define") || strContains(content[i], "#ifdef") || strContains(content[i], "#ifndef") || strContains(content[i], "#endif"))
+        {
+            content.erase(content.begin() + i); 
+            continue; 
+        }
+        i++; 
+    }
+
+
+    std::ofstream outFile(outPath); 
+
+    if(outFile.is_open() == false)
+    {
+        std::cout << "Error: Could not write to " << outPath << std::endl; 
+        return 1; 
+    }
+
+    std::cout << "Writing " << content.size() << " lines to " << outPath << std::endl; 
 
     for(size_t i = 0; i < content.size(); i++)
     {
-        std::cout << content[i] << std::endl; 
+        outFile << content[i] << "\n"; 
     }
 
-    std::cout << "Registry: " << std::endl; 
-
-    for(const auto& pair : defines)
-    {
-        std::cout << "Key " << pair.first << " => " << pair.second << std::endl; 
-    }
+    outFile.close(); 
 
     return 0; 
 }
