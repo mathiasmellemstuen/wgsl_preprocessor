@@ -246,7 +246,6 @@ int main(int argc, char* argv[])
         i++; 
     }
 
-
     std::ofstream outFile(outPath); 
 
     if(outFile.is_open() == false)
