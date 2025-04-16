@@ -234,18 +234,61 @@ int main(int argc, char* argv[])
         i++;
     }
 
+    // Adding macro lines to the meta registry 
+    std::map<std::string, std::string> metaRegistry; 
+
+    for(size_t i = 0; i < content.size(); i++) 
+    {
+        if(strContains(content[i], "#meta"))
+        {
+            std::vector<std::string> strSplitted = split(content[i], ' ');
+            
+            std::cout << strSplitted.size() << std::endl; 
+
+            if(strSplitted.size() == 3)
+            {
+                metaRegistry[strSplitted[1]] = strSplitted[2]; 
+            }
+            else
+            {
+                std::cout << "Wrong count of arguments in meta at line " << i << std::endl; 
+            }
+        }
+    }
+
     // Cleaning up and removing all preprocessor lines
     for(size_t i = 0; i < content.size();)
     {
 
-        if(strContains(content[i], "#define") || strContains(content[i], "#ifdef") || strContains(content[i], "#ifndef") || strContains(content[i], "#endif"))
+        if(strContains(content[i], "#define") || strContains(content[i], "#ifdef") || strContains(content[i], "#ifndef") || strContains(content[i], "#endif") || strContains(content[i], "#meta"))
         {
             content.erase(content.begin() + i); 
             continue; 
         }
         i++; 
     }
+    // Creating meta file
+    std::ofstream metaFile(outPath + ".meta");
 
+    std::cout << "Writing " << metaRegistry.size() << " meta elements to file " << outPath << ".meta" << std::endl; 
+
+    bool isFirst = true; 
+
+    for(const auto& pair : metaRegistry)
+    {
+        
+        if(isFirst == false)
+        {
+            metaFile << "\n"; 
+        }
+
+        isFirst = false; 
+        metaFile << pair.first << " " << pair.second; 
+    }
+
+    metaFile.close(); 
+
+    // Creating wgsl out file
     std::ofstream outFile(outPath); 
 
     if(outFile.is_open() == false)
